@@ -7,8 +7,9 @@
     So you have the advantages of the version management in GitHub and if you change the winget-install.ps1, you don't need to update the intunewin package.
 
 .NOTES 
+    Version 1.0
     Put this command line as Install Cmd in Intune (this command uses x64 Powershell):
-    "%systemroot%\sysnative\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File winget-web-install.ps1 -AppId Notepad++.Notepad++ -AppName Notepad++ -GitHubPath "/Borcon/Device-Management/main/Apps/WinGet Template/winget-install.ps1"
+    "%systemroot%\sysnative\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File winget-web-install.ps1 -AppId Notepad++.Notepad++ -AppName Notepad++ -GitHubPath "Borcon/Device-Management/main/Apps/WinGet%20Template/winget-install.ps1"
 
     Logfiles are added to the eventlog application.
 
