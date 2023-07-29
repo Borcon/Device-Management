@@ -7,7 +7,7 @@
     So you have the advantages of the version management in GitHub and if you change the winget-install.ps1, you don't need to update the intunewin package.
 
 .NOTES 
-    Version 1.0
+    Version 1.1
     Put this command line as Install Cmd in Intune (this command uses x64 Powershell):
     "%systemroot%\sysnative\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File winget-web-install.ps1 -AppId Notepad++.Notepad++ -AppName Notepad++ -GitHubPath "Borcon/Device-Management/main/Apps/WinGet%20Template/winget-install.ps1"
 
@@ -110,10 +110,16 @@ try {
 
     $StartTime = Get-Date -Format "yyyy/MM/dd HH:mm:ss"
 
+    # Create Temp Directory for Download
+    $TempFolder = "$ENV:TEMP\WinGet_$AppName"
+    if (-not(Test-Path -Path $TempFolder)) {
+        New-Item -Path $TempFolder -ItemType Directory -Force
+    }
+
     # Download and Execute Script
-    Invoke-WebRequest -Uri $ScriptUrl -OutFile .\Install.ps1
-    Unblock-File -Path .\Install.ps1
-    $Return = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy RemoteSigned -File .\Install.ps1 $ScriptParam" -Wait -PassThru -NoNewWindow
+    Invoke-WebRequest -Uri $ScriptUrl -OutFile "$TempFolder\Install.ps1"
+    Unblock-File -Path "$TempFolder\Install.ps1"
+    $Return = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy RemoteSigned -File ""$TempFolder\Install.ps1"" $ScriptParam" -Wait -PassThru -NoNewWindow
 
     # Direct Web Execution - Not Secure and some restrictions (exit command kills the starting script)
     # $Return = Invoke-Expression "& { $(Invoke-RestMethod $ScriptUrl) } $ScriptParam" -ErrorAction Stop
@@ -127,7 +133,8 @@ catch {
     Write-Error $ErrorMessage.Exception.Message
 }
 
-
+# Delete Temp Directory
+Remove-Item -Path $TempFolder -Force
 
 
 # ==========================================
@@ -138,7 +145,6 @@ $Message = @"
 $Action $AppName                
 ###################################                                                                                                                  
 Setup Parameter: $ScriptParam
-UserSetup: $UserSetup
 
 Result: $($Return.ExitCode)
 Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))
