@@ -134,7 +134,9 @@ catch {
 }
 
 # Delete Temp Directory
-Remove-Item -Path $TempFolder -Force
+Remove-Item -Path $TempFolder -Recurse -Force
+
+
 
 
 # ==========================================
