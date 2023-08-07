@@ -261,5 +261,6 @@ if ($Uninstall) {
     }
 }
 
+Write-Host ''
 Stop-Transcript
 Exit $ExitCode

@@ -137,7 +137,7 @@ if ($AdminRights -eq $true) {
             Write-Host "--> Creating event source [$EventSourceName] on event log [$EventLogName]"
             [System.Diagnostics.EventLog]::CreateEventSource("$EventSourceName",$EventLogName)
         } else { 
-            Write-Host "Event source [$EventSourceName] is already registered" 
+            Write-Host "--> Event source [$EventSourceName] is already registered" 
         }
 
     }
@@ -170,8 +170,8 @@ try {
     Write-Host 'Check download folder'
     $TempFolder = "$ENV:TEMP\WinGet_$AppName"
     if (-not(Test-Path -Path $TempFolder)) {
-        Write-Host '--> Create download folder'
-        New-Item -Path $TempFolder -ItemType Directory -Force
+        Write-Host "--> Create download folder $TempFolder"
+        New-Item -Path $TempFolder -ItemType Directory -Force | Out-Null
     }
 
     # Download script
@@ -228,8 +228,6 @@ Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))
 Log Path: $LogPath
 
 "@
-
-Write-Host ''
 
 # Write Eventlog
 try {
