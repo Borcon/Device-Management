@@ -69,7 +69,7 @@ Param (
 # Logging
 $LogPath   = "$Env:ProgramData\Intune\Apps\Logs\$AppName"
 $LogFile   = "$LogPath\WinGet-Web-Install.log"
-$StartTime = Get-Date -Format "yyyy/MM/dd HH:mm:ss"
+$StartTime = Get-Date -Format "yyyy\/MM\/dd HH:mm:ss"
 
 # Github Path
 $ScriptUrl = "https://raw.gitHubusercontent.com/$GitHubPath"
@@ -225,7 +225,6 @@ Setup Parameter: $ScriptParam
 Result: $ExitCode
 Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))
 
-
 Log Path: $LogPath
 
 "@
@@ -251,7 +250,7 @@ catch {
 }
 
 Write-Host ''
-Write-Host "End Time: $(Get-Date -Format "yyyy/MM/dd HH:mm:ss")"
+Write-Host "End Time: $(Get-Date -Format "yyyy\/MM\/dd HH:mm:ss")"
 Write-Host ''
 
 Stop-Transcript
