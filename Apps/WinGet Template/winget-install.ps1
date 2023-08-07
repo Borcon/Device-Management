@@ -1,15 +1,24 @@
 ﻿<# 
 .SYNOPSIS
-    Intune WinGet Template Version 1.0
+    Intune WinGet Template
 
 .DESCRIPTION 
     This script can install/uninstall any application via WinGet.
 
 .NOTES 
+    Version 1.1
+
     Put this command line as Install Cmd in Intune (this command uses x64 Powershell):
     "%systemroot%\sysnative\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File winget-install.ps1 -AppId Notepad++.Notepad++ -AppName Notepad++
 
     Logfiles can be found here: C:\ProgramData\Intune\Apps\Logs
+
+    Return Codes:   x = WinGet install/uninstall command returns exit code
+                    1 = WinGet not found
+                    2 = Uninstall failed
+                    3 = Uninstall failed (WinGet check after uninstall)
+                    4 = Install failed
+                    5 = Install failed (WinGet check after install)
 
 .Parameter AppId 
     Specifies the AppID
@@ -50,14 +59,20 @@ Param (
     $Param
 )
 
+
+
+
+# ==========================================
+# VARIABLES
+# ==========================================
 # Variables
 $LogPath        = "$Env:ProgramData\Intune\Apps\Logs\$AppName"
 $LogFile        = "$LogPath\$AppName.log"
 
 if ($Uninstall) {
-    $Action = "UNINSTALL"
+    $Action = 'UNINSTALL'
 } else {
-    $Action = "INSTALL"
+    $Action = 'INSTALL'
 }
 
 
@@ -68,16 +83,16 @@ if ($Uninstall) {
 # ======================
 # Cleanup Logs
 if (Test-Path -Path $LogFile -PathType Leaf) {
-    Remove-Item -Path $LogFile -Force
+    Remove-Item -Path $LogFile -Force -Confirm:$false
 }
 
 # Start Logging
 Start-Transcript -Path $LogFile -Force -Append
 
-Write-Host ""
-Write-Host "============================================="
-Write-Host " $Action"
-Write-Host "============================================="
+Write-Host ''
+Write-Host '============================================='  -ForegroundColor Cyan
+Write-Host " $Action"                                       -ForegroundColor Cyan
+Write-Host '============================================='  -ForegroundColor Cyan
 Write-Host "Computername: $($env:USERNAME)"
 Write-Host "Username    : $($env:USERNAME)"
 
@@ -104,12 +119,12 @@ elseif (Test-Path "$WingetPath\winget.exe") {
     $Winget = "$WingetPath\winget.exe"
 }
 
-Write-Host ""
+Write-Host ''
 Write-Host "WinGet Path: $Winget"
-Write-Host ""
+Write-Host ''
 
 if (-not(Test-Path -Path $Winget -PathType Leaf)) {
-    Write-Error "Winget not found - Exit 1"
+    Write-Error 'Winget not found - Exit 1'
     Stop-Transcript
     Exit 1
 }
@@ -124,52 +139,55 @@ if (-not(Test-Path -Path $Winget -PathType Leaf)) {
 if ($Uninstall) {
 
     try {
-        Write-Host "==============="
-        Write-Host "Uninstall Setup"
-        Write-Host "==============="
+        Write-Host '==============='
+        Write-Host 'Uninstall Setup'
+        Write-Host '==============='
         Write-Host "$Winget uninstall --exact --id $AppId --silent --accept-source-agreements $Param"
         $Process = & "$Winget" uninstall --exact --id $AppId --silent --accept-source-agreements $Param | Out-String
-        Write-Host "Result: $LASTEXITCODE"
-        Write-Host "------------------------------ Console Output ------------------------------"
-        Write-Host $Process
-        Write-Host "------------------------------ Console Output ------------------------------"
+        $ExitCode = $LASTEXITCODE
+        Write-Host "Result: $ExitCode"
+        Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
+        Write-Host $Process                                                                             -ForegroundColor DarkGray
+        Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
     }
     catch {
-        Write-Host ""
-        Write-Host "========================="
-        Write-Error "Uninstall failed"
-        Write-Host "========================="
+        Write-Host ''
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Host 'Uninstall failed'           -ForegroundColor Red
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Error $_
         Stop-Transcript
         Exit 2
     }
 
     #Get "Winget List AppID"
-    Write-Host ""
-    Write-Host "======================"
-    Write-Host "Check Uninstall Result"
-    Write-Host "======================"
+    Write-Host ''
+    Write-Host '======================'
+    Write-Host 'Check Uninstall Result'
+    Write-Host '======================'
     $InstalledApp = & "$Winget" list --Id $AppId --accept-source-agreements | Out-String
     Write-Host "Result: $LASTEXITCODE"
-    Write-Host "------------------------------ Output Console Start ------------------------------"
-    Write-Host $InstalledApp
-    Write-Host "------------------------------ Output Console End ------------------------------"
+    Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
+    Write-Host $InstalledApp                                                                        -ForegroundColor DarkGray                 
+    Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
 
     # Check Uninstall Result
     if ($InstalledApp -match [regex]::Escape($AppId)) {
 
-        Write-Host ""
-        Write-Host "========================="
-        Write-Error "Uninstall failed"
-        Write-Host "========================="
+        Write-Host ''
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Host 'Uninstall failed'           -ForegroundColor Red
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Error $_
         Stop-Transcript
         Exit 3
 
     } else {
 
-        Write-Host ""
-        Write-Host "========================="
-        Write-Host "Uninstall successfully"
-        Write-Host "========================="
+        Write-Host ''
+        Write-Host '========================='  -ForegroundColor Green
+        Write-Host 'Uninstall successfully'     -ForegroundColor Green
+        Write-Host '========================='  -ForegroundColor Green
 
     }
     
@@ -178,61 +196,65 @@ if ($Uninstall) {
     # INSTALL
     try {
         if ($UserSetup) {
-            Write-Host "=================="
-            Write-Host "Install User Setup"
-            Write-Host "=================="
+            Write-Host '=================='
+            Write-Host 'Install User Setup'
+            Write-Host '=================='
             Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user $Param"
             $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user $Param
-            Write-Host "Result: $LASTEXITCODE"
-            Write-Host "------------------------------ Output Console Start ------------------------------"
-            Write-Host $Process
-            Write-Host "------------------------------ Output Console End ------------------------------"
+            $ExitCode = $LASTEXITCODE
+            Write-Host "Result: $ExitCode"
+            Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
+            Write-Host $Process                                                                             -ForegroundColor DarkGray
+            Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
         } else {
-            Write-Host "====================="
-            Write-Host "Install Machine Setup"
-            Write-Host "====================="
+            Write-Host '====================='
+            Write-Host 'Install Machine Setup'
+            Write-Host '====================='
             Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=machine $Param"
             $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=machine $Param
-            Write-Host "Result: $LASTEXITCODE"
-            Write-Host "------------------------------ Output Console Start ------------------------------"
-            Write-Host $Process
-            Write-Host "------------------------------ Output Console End ------------------------------"
+            $ExitCode = $LASTEXITCODE
+            Write-Host "Result: $ExitCode"
+            Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
+            Write-Host $Process                                                                             -ForegroundColor DarkGray
+            Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
         }
     }
     catch {
-        Write-Host ""
-        Write-Host "========================="
-        Write-Error "Install failed"
-        Write-Host "========================="
+        Write-Host ''
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Host 'Install failed'             -ForegroundColor Red
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Error $_
         Stop-Transcript
         Exit 4
     }
 
     #Get "Winget List AppID"
-    Write-Host ""
-    Write-Host "===================="
-    Write-Host "Check Install Result"
-    Write-Host "===================="
+    Write-Host ''
+    Write-Host '===================='
+    Write-Host 'Check Install Result'
+    Write-Host '===================='
     $InstalledApp = & "$Winget" list --Id $AppId --accept-source-agreements | Out-String
     Write-Host "Result: $LASTEXITCODE"
-    Write-Host "------------------------------ Output Console Start ------------------------------"
-    Write-Host $InstalledApp
-    Write-Host "------------------------------ Output Console End ------------------------------"
+    Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
+    Write-Host $InstalledApp                                                                        -ForegroundColor DarkGray
+    Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
 
     # Check Install Result
     if ($InstalledApp -match [regex]::Escape($AppId)) {
 
-        Write-Host ""
-        Write-Host "========================="
-        Write-Host "Install successfully"
-        Write-Host "========================="
+        Write-Host ''
+        Write-Host '========================='  -ForegroundColor Green
+        Write-Host 'Install successfully'       -ForegroundColor Green
+        Write-Host '========================='  -ForegroundColor Green
 
     } else {
 
-        Write-Host ""
-        Write-Host "========================="
-        Write-Error "Install failed"
-        Write-Host "========================="
+        Write-Host ''
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Host 'Install failed'             -ForegroundColor Red
+        Write-Host '========================='  -ForegroundColor Red
+        Write-Error $_
         Stop-Transcript
         Exit 5
 
@@ -240,4 +262,4 @@ if ($Uninstall) {
 }
 
 Stop-Transcript
-Exit 0
+Exit $ExitCode
