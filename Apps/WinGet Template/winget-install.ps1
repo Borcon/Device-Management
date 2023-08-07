@@ -125,6 +125,7 @@ Log Path: $LogPath
     # Write Eventlog
     try {
 
+        Write-Host ''
         Write-Host 'Write Eventlog'
         if ($ErrorMessage) {
             $Message += "Error: $ErrorMessage"
@@ -198,6 +199,7 @@ if ($AdminRights -eq $true) {
             Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
         }
 
+        Write-Host 'Check Visual C++ Redist 2013 and 2015-2022'
         $VcRedist2013InstallState = Get-ChildItem -Recurse HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Where-Object {$_.GetValue("DisplayName") -like "*Visual C++ 2013 Redistributable*"}
         $VcRedist2022InstallState = Get-ChildItem -Recurse HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Where-Object {$_.GetValue("DisplayName") -like "*Visual C++ 2015-2022 Redistributable*"}
 
