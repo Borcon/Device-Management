@@ -84,6 +84,15 @@ if ($Uninstall) {
 
 
 # ==========================================
+# APP CHANGES
+# ==========================================
+# VSCode
+if ($AppId -eq 'Microsoft.VisualStudioCode') { $Param = '--override "/VERYSILENT /NORESTART /MERGETASKS=!runcode,addcontextmenufiles,addcontextmenufolders"' }
+
+
+
+
+# ==========================================
 # FUNCTIONS
 # ==========================================
 function ExitScript {
@@ -107,7 +116,7 @@ function ExitScript {
     if ($Uninstall -eq $true) {
         $Command = """$Winget"" uninstall --exact --id $AppId --silent --accept-source-agreements $Param"
     } else {
-        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=$Scope $Param"
+        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements $Scope $Param"
     }
 
 $Message = @"
@@ -352,11 +361,10 @@ if ($Uninstall) {
     # INSTALL
     try {
 
-        $Scope = "machine"
-        if ($UserSetup) { $Scope = "user" }
+        if ($UserSetup) { $Scope = "--scope=user" }
 
-        Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=$Scope $Param"
-        $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=$Scope $Param
+        Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements $Scope $Param"
+        $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements $Scope $Param
         $ExitCode = $LASTEXITCODE
         Write-Host "Result: $ExitCode"
         Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
