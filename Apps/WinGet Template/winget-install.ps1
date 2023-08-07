@@ -66,8 +66,13 @@ Param (
 # VARIABLES
 # ==========================================
 # Variables
-$LogPath        = "$Env:ProgramData\Intune\Apps\Logs\$AppName"
-$LogFile        = "$LogPath\$AppName.log"
+$LogPath            = "$Env:ProgramData\Intune\Apps\Logs\$AppName"
+$LogFile            = "$LogPath\$AppName.log"
+$StartTime          = Get-Date -Format "yyyy\/MM\/dd HH:mm:ss"
+
+# Eventlog
+$EventLogName       = 'Intune'
+$EventSourceName    = 'App'
 
 if ($Uninstall) {
     $Action = 'UNINSTALL'
@@ -75,6 +80,75 @@ if ($Uninstall) {
     $Action = 'INSTALL'
 }
 
+
+
+
+# ==========================================
+# FUNCTIONS
+# ==========================================
+function ExitScript {
+    param (
+        [Parameter(Mandatory=$true)]
+        [int] $ExitCode,
+
+        [Parameter(Mandatory=$false)]
+        [string] $ErrorMessage
+    )
+
+    # Get end time and time span
+    $EndTime = Get-Date -Format "yyyy\/MM\/dd HH:mm:ss"
+    $TimeSpan = New-TimeSpan -Start $StartTime -End $EndTime
+
+
+    # =============
+    # EVENTLOG
+    # =============
+    # Get Commandline for eventlog
+    if ($UserSetup -eq $true) {
+        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user $Param"
+    } elseif ($Uninstall -eq $true) {
+        $Command = """$Winget"" uninstall --exact --id $AppId --silent --accept-source-agreements $Param"
+    } else {
+        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=machine $Param"
+    }
+
+$Message = @"
+###################################
+$Action $AppName                
+###################################                                                                                                                  
+Command: $Command
+Result: $ExitCode
+Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))
+Log Path: $LogPath
+"@
+
+    # Write Eventlog
+    try {
+
+        Write-Host 'Write Eventlog'
+        if ($ErrorMessage) {
+            $Message += "Error: $ErrorMessage"
+            Write-EventLog -LogName $EventLogName -Source $EventSourceName -EventID 1 -EntryType Error -Message $Message
+        } else {
+            Write-EventLog -LogName $EventLogName -Source $EventSourceName -EventID 1 -EntryType Information -Message $Message
+        }
+
+    }
+    catch {
+
+        Write-Error $_
+
+    }
+
+    Write-Host ''
+    Write-Host "Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))"
+    Write-Host "End Time: $EndTime"
+    Write-Host ''
+
+    Stop-Transcript
+    Exit $ExitCode
+
+}
 
 
 
@@ -95,13 +169,99 @@ Write-Host " $Action"                                       -ForegroundColor Cya
 Write-Host '============================================='  -ForegroundColor Cyan
 Write-Host "Computername: $($env:USERNAME)"
 Write-Host "Username    : $($env:USERNAME)"
-
+Write-Host ''
+Write-Host "Start Time  : $StartTime"
+Write-Host ''
 
 
 
 # ======================
 # REQUIREMENTS
 # ======================
+# Check for Admin Rights
+Write-Host 'Check for admin rights'
+$User        = [Security.Principal.WindowsIdentity]::GetCurrent()
+$AdminRights = (New-Object Security.Principal.WindowsPrincipal $User).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+
+
+if ($AdminRights -eq $true) {
+
+    Write-Host '--> User has admin rights'
+    Write-Host ''
+
+    # Check/Install VC Redist
+    try {
+
+        # Trust Powershell Gallery
+        if ((Get-PSRepository -Name 'PSGallery').InstallationPolicy -ne "Trusted") {
+            Write-Host 'Set PSGallery as Trusted'
+            Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+        }
+
+        $VcRedist2013InstallState = Get-ChildItem -Recurse HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Where-Object {$_.GetValue("DisplayName") -like "*Visual C++ 2013 Redistributable*"}
+        $VcRedist2022InstallState = Get-ChildItem -Recurse HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Where-Object {$_.GetValue("DisplayName") -like "*Visual C++ 2015-2022 Redistributable*"}
+
+        if ($VcRedist2013InstallState.Count -lt 2 -or $VcRedist2022InstallState.Count -lt 2) {
+            Write-Host 'Install Powershell Module VcRedist'
+            Install-Module -Name VcRedist -Force -Scope AllUsers
+        }
+
+        if ($VcRedist2013InstallState.Count -lt 2) {
+            Write-Host 'Download and install Microsoft Visual C++ 2013 Redistributable'
+            Get-VcList -Release 2013 | Save-VcRedist -Path $PSScriptRoot | Install-VcRedist -Silent -Force
+        }
+
+        if ($VcRedist2022InstallState.Count -lt 2) {
+            Write-Host 'Download and install Microsoft Visual C++ 2015-2022 Redistributable'
+            Get-VcList -Release 2022 | Save-VcRedist -Path $PSScriptRoot | Install-VcRedist -Silent -Force
+        }
+
+    }
+    catch {
+
+        $ErrorMessage = $_
+        Write-Host 'Check/Install of C++ Redist failed' -ForegroundColor Red
+        Write-Error $ErrorMessage.Exception.Message
+
+    }
+
+    try {
+
+        # Eventlog - Register Source (Admin Rights needed)
+        Write-Host ''
+        Write-Host 'Check eventlog configuration'
+        
+        # Create Eventlog if not exists
+        if ([System.Diagnostics.EventLog]::Exists($EventLogName) -eq $false) {
+            Write-Host "--> Create eventlog $EventLogName"
+            New-EventLog -Logname $EventLogName -Source $EventSourceName -ErrorAction Stop
+        } else {
+            Write-Host "--> Eventlog $EventLogName already exists - Nothing to do"
+        }
+
+        # Create Eventlog Source if not exists
+        if ([System.Diagnostics.EventLog]::SourceExists($EventSourceName) -eq $false) {
+            Write-Host "--> Creating event source [$EventSourceName] on event log [$EventLogName]"
+            [System.Diagnostics.EventLog]::CreateEventSource("$EventSourceName",$EventLogName)
+        } else { 
+            Write-Host "--> Event source [$EventSourceName] is already registered" 
+        }
+
+    }
+    catch {
+
+        $ErrorMessage = $_
+        Write-Host 'Failed to configure eventlog' -ForegroundColor Red
+        Write-Error $ErrorMessage.Exception.Message
+
+    }
+
+} else {
+
+    Write-Host '--> User has no admin rights'
+
+}
+
 # Get WinGet Path (if admin context)
 $ResolveWingetPath = Resolve-Path "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*_*__8wekyb3d8bbwe" | Sort-Object { [version]($_.Path -replace '^[^\d]+_((\d+\.)*\d+)_.*', '$1') }
 if ($ResolveWingetPath) {
@@ -125,8 +285,7 @@ Write-Host ''
 
 if (-not(Test-Path -Path $Winget -PathType Leaf)) {
     Write-Error 'Winget not found - Exit 1'
-    Stop-Transcript
-    Exit 1
+    ExitScript -ExitCode 1 -ErrorMessage 'Winget not found'
 }
 
 
@@ -156,8 +315,7 @@ if ($Uninstall) {
         Write-Host 'Uninstall failed'           -ForegroundColor Red
         Write-Host '========================='  -ForegroundColor Red
         Write-Error $_
-        Stop-Transcript
-        Exit 2
+        ExitScript -ExitCode 2 -ErrorMessage 'Uninstall failed'
     }
 
     #Get "Winget List AppID"
@@ -166,7 +324,8 @@ if ($Uninstall) {
     Write-Host 'Check Uninstall Result'
     Write-Host '======================'
     $InstalledApp = & "$Winget" list --Id $AppId --accept-source-agreements | Out-String
-    Write-Host "Result: $LASTEXITCODE"
+    $ExitCode = $LASTEXITCODE
+    Write-Host "Result: $ExitCode"
     Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
     Write-Host $InstalledApp                                                                        -ForegroundColor DarkGray                 
     Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
@@ -178,9 +337,8 @@ if ($Uninstall) {
         Write-Host '========================='  -ForegroundColor Red
         Write-Host 'Uninstall failed'           -ForegroundColor Red
         Write-Host '========================='  -ForegroundColor Red
-        Write-Error $_
-        Stop-Transcript
-        Exit 3
+        Write-Error 'Uninstall failed after winget list check'
+        ExitScript -ExitCode 3 -ErrorMessage 'Uninstall failed after winget list check'
 
     } else {
 
@@ -188,6 +346,7 @@ if ($Uninstall) {
         Write-Host '========================='  -ForegroundColor Green
         Write-Host 'Uninstall successfully'     -ForegroundColor Green
         Write-Host '========================='  -ForegroundColor Green
+        $ExitCode = 0
 
     }
     
@@ -225,8 +384,7 @@ if ($Uninstall) {
         Write-Host 'Install failed'             -ForegroundColor Red
         Write-Host '========================='  -ForegroundColor Red
         Write-Error $_
-        Stop-Transcript
-        Exit 4
+        ExitScript -ExitCode 4 -ErrorMessage 'Install failed'
     }
 
     #Get "Winget List AppID"
@@ -235,7 +393,8 @@ if ($Uninstall) {
     Write-Host 'Check Install Result'
     Write-Host '===================='
     $InstalledApp = & "$Winget" list --Id $AppId --accept-source-agreements | Out-String
-    Write-Host "Result: $LASTEXITCODE"
+    $ExitCode = $LASTEXITCODE
+    Write-Host "Result: $ExitCode"
     Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
     Write-Host $InstalledApp                                                                        -ForegroundColor DarkGray
     Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
@@ -247,6 +406,7 @@ if ($Uninstall) {
         Write-Host '========================='  -ForegroundColor Green
         Write-Host 'Install successfully'       -ForegroundColor Green
         Write-Host '========================='  -ForegroundColor Green
+        $ExitCode = 0
 
     } else {
 
@@ -254,13 +414,18 @@ if ($Uninstall) {
         Write-Host '========================='  -ForegroundColor Red
         Write-Host 'Install failed'             -ForegroundColor Red
         Write-Host '========================='  -ForegroundColor Red
-        Write-Error $_
-        Stop-Transcript
-        Exit 5
+        Write-Error 'Install failed after winget list check'
+        ExitScript -ExitCode 5 -ErrorMessage 'Install failed after winget list check'
 
     }
 }
 
-Write-Host ''
-Stop-Transcript
-Exit $ExitCode
+# Exit Script
+ExitScript -ExitCode $ExitCode
+
+
+
+
+
+
+

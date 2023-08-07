@@ -13,6 +13,9 @@
 
     Logfiles are added to the eventlog application.
 
+    Return Codes:   x = WinGet install/uninstall command returns exit code
+                    1 = Error with download or execute command
+
 .Parameter GitHubPath 
     Specifies the relative path to the powershell file in GitHub
 
@@ -78,15 +81,7 @@ $ScriptUrl = "https://raw.gitHubusercontent.com/$GitHubPath"
 $ScriptParam = "-AppId ""$AppId"" -AppName ""$AppName"""
 if ($UserSetup) {$ScriptParam += " -UserSetup"}
 if ($Uninstall) {$ScriptParam += " -Uninstall"}
-if ($Param -ne "" -and $null -ne $Param) {$ScriptParam += " -Param ""$Param"""}
-
-# Setup Action
-$Action = 'Install'
-if ($Uninstall) {$Action = 'Uninstall'}
-
-# Eventlog
-$EventLogName       = 'Intune'
-$EventSourceName    = 'App'
+if ($Param -ne "" -and $null -ne $Param) {$ScriptParam += " -Param $Param"}
 
 
 
@@ -95,66 +90,19 @@ $EventSourceName    = 'App'
 # LOGGING
 # ==========================================
 # Cleanup Logs
-if (Test-Path -Path $LogFile -PathType Leaf) {
-    Remove-Item -Path $LogFile -Force -Confirm:$false
+if (Test-Path -Path $LogPath) {
+    Remove-Item -Path $LogPath -Recurse -Force -Confirm:$false
 }
+
+# Create Log Path
+New-Item -Path $LogPath -ItemType Directory | Out-Null
 
 # Start Logging
 Start-Transcript -Path $LogFile -Force -Append
+Write-Host ''
 Write-Host "Start Time: $StartTime"
 Write-Host ''
-
-
-
-# ==========================================
-# PREPARE
-# ==========================================
-# Check for Admin Rights
-Write-Host 'Check for admin rights'
-$User        = [Security.Principal.WindowsIdentity]::GetCurrent()
-$AdminRights = (New-Object Security.Principal.WindowsPrincipal $User).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
-
-# Eventlog - Register Source (Admin Rights needed)
-if ($AdminRights -eq $true) {
-
-    Write-Host '--> User has admin rights'
-
-    try {
-
-        Write-Host ''
-        Write-Host 'Check eventlog configuration'
-        
-        # Create Eventlog if not exists
-        if ([System.Diagnostics.EventLog]::Exists($EventLogName) -eq $false) {
-            Write-Host "--> Create eventlog $EventLogName"
-            New-EventLog -Logname $EventLogName -Source $EventSourceName -ErrorAction Stop
-        } else {
-            Write-Host "--> Eventlog $EventLogName already exists - Nothing to do"
-        }
-
-        # Create Eventlog Source if not exists
-        if ([System.Diagnostics.EventLog]::SourceExists($EventSourceName) -eq $false) {
-            Write-Host "--> Creating event source [$EventSourceName] on event log [$EventLogName]"
-            [System.Diagnostics.EventLog]::CreateEventSource("$EventSourceName",$EventLogName)
-        } else { 
-            Write-Host "--> Event source [$EventSourceName] is already registered" 
-        }
-
-    }
-    catch {
-
-        $ErrorMessage = $_
-        Write-Host 'Failed to configure eventlog' -ForegroundColor Red
-        Write-Error $ErrorMessage.Exception.Message
-
-    }
-
-} else {
-
-    Write-Host '--> User has no admin rights'
-
-}
-
+Write-Host "Script Parameter: $ScriptParam"
 
 
 
@@ -176,6 +124,7 @@ try {
 
     # Download script
     Write-Host 'Download powershell script'
+    Write-Host "--> $ScriptUrl"
     Invoke-WebRequest -Uri $ScriptUrl -OutFile "$TempFolder\Install.ps1"
 
     # Unblock script
@@ -186,7 +135,7 @@ try {
     Write-Host 'Execute powershell script'
     $Return = Start-Process -FilePath 'powershell.exe' -ArgumentList "-ExecutionPolicy RemoteSigned -File ""$TempFolder\Install.ps1"" $ScriptParam" -Wait -PassThru -NoNewWindow
     $ExitCode = $Return.ExitCode
-    Write-Host "Result: $ExitCode"
+    Write-Host "--> Result: $ExitCode"
 
     # Direct Web Execution - Not Secure and some restrictions (exit command kills the starting script)
     # $Return = Invoke-Expression "& { $(Invoke-RestMethod $ScriptUrl) } $ScriptParam" -ErrorAction Stop
@@ -194,8 +143,7 @@ try {
 }
 catch {
 
-    $ErrorMessage = $_
-    Write-Error $ErrorMessage.Exception.Message
+    Write-Error $_
     $ExitCode = 1
 
 }
@@ -207,48 +155,12 @@ Write-Host 'Remove download directory'
 Remove-Item -Path $TempFolder -Recurse -Force -Confirm:$false
 
 # Get end time and time span
-$EndTime = Get-Date -Format "yyyy/MM/dd HH:mm:ss"
-$TimeSpan = New-TimeSpan -Start $StartTime -End $EndTime
-
-
-
-
-# ==========================================
-# EVENTLOG
-# ==========================================
-$Message = @"
-###################################
-$Action $AppName                
-###################################                                                                                                                  
-Setup Parameter: $ScriptParam
-
-Result: $ExitCode
-Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))
-
-Log Path: $LogPath
-
-"@
-
-# Write Eventlog
-try {
-
-    Write-Host 'Write Eventlog'
-    if ($ErrorMessage) {
-        $Message += "Error: $ErrorMessage"
-        Write-EventLog -LogName $EventLogName -Source $EventSourceName -EventID 1 -EntryType Error -Message $Message
-    } else {
-        Write-EventLog -LogName $EventLogName -Source $EventSourceName -EventID 1 -EntryType Information -Message $Message
-    }
-
-}
-catch {
-
-    Write-Error $_
-
-}
+$EndTime    = Get-Date -Format "yyyy\/MM\/dd HH:mm:ss"
+$TimeSpan   = New-TimeSpan -Start $StartTime -End $EndTime
 
 Write-Host ''
 Write-Host "End Time: $(Get-Date -Format "yyyy\/MM\/dd HH:mm:ss")"
+Write-Host "Install Duration: $($TimeSpan.ToString("mm' minutes 'ss' seconds'"))"
 Write-Host ''
 
 Stop-Transcript
