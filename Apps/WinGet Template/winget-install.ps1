@@ -104,12 +104,10 @@ function ExitScript {
     # EVENTLOG
     # =============
     # Get Commandline for eventlog
-    if ($UserSetup -eq $true) {
-        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user $Param"
-    } elseif ($Uninstall -eq $true) {
+    if ($Uninstall -eq $true) {
         $Command = """$Winget"" uninstall --exact --id $AppId --silent --accept-source-agreements $Param"
     } else {
-        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=machine $Param"
+        $Command = """$Winget"" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=$Scope $Param"
     }
 
 $Message = @"
@@ -300,9 +298,6 @@ if (-not(Test-Path -Path $Winget -PathType Leaf)) {
 if ($Uninstall) {
 
     try {
-        Write-Host '==============='
-        Write-Host 'Uninstall Setup'
-        Write-Host '==============='
         Write-Host "$Winget uninstall --exact --id $AppId --silent --accept-source-agreements $Param"
         $Process = & "$Winget" uninstall --exact --id $AppId --silent --accept-source-agreements $Param | Out-String
         $ExitCode = $LASTEXITCODE
@@ -356,29 +351,18 @@ if ($Uninstall) {
 
     # INSTALL
     try {
-        if ($UserSetup) {
-            Write-Host '=================='
-            Write-Host 'Install User Setup'
-            Write-Host '=================='
-            Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user $Param"
-            $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user $Param
-            $ExitCode = $LASTEXITCODE
-            Write-Host "Result: $ExitCode"
-            Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
-            Write-Host $Process                                                                             -ForegroundColor DarkGray
-            Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
-        } else {
-            Write-Host '====================='
-            Write-Host 'Install Machine Setup'
-            Write-Host '====================='
-            Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=machine $Param"
-            $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=machine $Param
-            $ExitCode = $LASTEXITCODE
-            Write-Host "Result: $ExitCode"
-            Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
-            Write-Host $Process                                                                             -ForegroundColor DarkGray
-            Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
-        }
+
+        $Scope = "machine"
+        if ($UserSetup) { $Scope = "user" }
+
+        Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=$Scope $Param"
+        $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=$Scope $Param
+        $ExitCode = $LASTEXITCODE
+        Write-Host "Result: $ExitCode"
+        Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
+        Write-Host $Process                                                                             -ForegroundColor DarkGray
+        Write-Host '------------------------------ Output Console End --------------------------------' -ForegroundColor DarkGray
+
     }
     catch {
         Write-Host ''
