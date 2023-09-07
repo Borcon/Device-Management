@@ -6,7 +6,7 @@
     This script can install/uninstall any application via WinGet.
 
 .NOTES 
-    Version 1.1
+    Version 1.2
 
     Put this command line as Install Cmd in Intune (this command uses x64 Powershell):
     "%systemroot%\sysnative\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File winget-install.ps1 -AppId Notepad++.Notepad++ -AppName Notepad++
@@ -186,6 +186,9 @@ Write-Host ''
 # ======================
 # REQUIREMENTS
 # ======================
+#Force TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # Check for Admin Rights
 Write-Host 'Check for admin rights'
 $User        = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -199,6 +202,14 @@ if ($AdminRights -eq $true) {
 
     # Check/Install VC Redist
     try {
+
+        # Check for NuGet Provider
+        $NuGetMinVersion = "2.8.5.201"
+        $NuGetProvider = Get-PackageProvider | Where-Object {$_.Name -eq "NuGet" -and $_.Version -ge $NuGetMinVersion}
+        if ($null -eq $NuGetProvider) {
+            Write-Host 'Install NuGet Package Provider'
+            Install-PackageProvider -Name NuGet -MinimumVersion $NuGetMinVersion -Scope AllUsers -Force
+        }
 
         # Trust Powershell Gallery
         if ((Get-PSRepository -Name 'PSGallery').InstallationPolicy -ne "Trusted") {
@@ -364,7 +375,8 @@ if ($Uninstall) {
         if ($UserSetup) { $Scope = "--scope=user" }
 
         Write-Host "$Winget install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements $Scope $Param"
-        $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements $Scope $Param
+        # $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements $Scope $Param
+        $Process = & "$Winget" install --exact --id $AppId --silent --accept-package-agreements --accept-source-agreements --scope=user --override "/VERYSILENT /NORESTART /MERGETASKS=!runcode,addcontextmenufiles,addcontextmenufolders"
         $ExitCode = $LASTEXITCODE
         Write-Host "Result: $ExitCode"
         Write-Host '------------------------------ Output Console Start ------------------------------' -ForegroundColor DarkGray
