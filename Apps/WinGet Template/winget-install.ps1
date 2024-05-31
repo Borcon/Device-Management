@@ -6,7 +6,7 @@
     This script can install/uninstall any application via WinGet.
 
 .NOTES 
-    Version 1.2
+    Version 1.3
 
     Put this command line as Install Cmd in Intune (this command uses x64 Powershell):
     "%systemroot%\sysnative\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File winget-install.ps1 -AppId Notepad++.Notepad++ -AppName Notepad++
@@ -281,6 +281,10 @@ if ($AdminRights -eq $true) {
     Write-Host '--> User has no admin rights'
 
 }
+
+# Install/Repair WinGet in Autopilot Phase
+Write-Host 'Install/Repair WinGet'
+Add-AppPackage -path "https://cdn.winget.microsoft.com/cache/source.msix."
 
 # Get WinGet Path (if admin context)
 $ResolveWingetPath = Resolve-Path "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*_*__8wekyb3d8bbwe" | Sort-Object { [version]($_.Path -replace '^[^\d]+_((\d+\.)*\d+)_.*', '$1') }
